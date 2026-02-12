@@ -1,5 +1,6 @@
 import asyncio
 import os
+from dotenv import load_dotenv
 from handlers import admin, scheduler
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -8,8 +9,9 @@ from ai_engine.model import AIEngine
 from handlers import menu
 
 
+load_dotenv()
 # В Railway добавьте TELEGRAM_BOT_TOKEN в Variables
-TOKEN = os.getenv("8376471127:AAFHrRVWR1nFnq9kbvql5NUxxk_ER4AQHIQ")
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 SERYOZHA_ID = 574403009 # ваш айдишник (или старт въебите прост)
 ANGEL_ID = 7911098627 # айдишник любимой
 
@@ -38,6 +40,9 @@ async def main():
     scheduler.setup_scheduler(bot, db, ANGEL_ID)
     
     await dp.start_polling(bot)
+
+if not TOKEN:
+    exit("Ошибка: Токен Telegram не найден! Проверь переменные окружения.")
 
 if __name__ == "__main__":
     asyncio.run(main())

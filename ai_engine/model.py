@@ -6,7 +6,7 @@ from .prompts import SYSTEM_PROMPT
 class AIEngine:
     def __init__(self):
         self.client = AsyncOpenAI(
-            api_key=os.getenv("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"),
+            api_key=os.getenv("AI_API_KEY"),
             base_url="https://api-inference.huggingface.co/v1/"
         )
         self.model_name = "microsoft/Phi-3-mini-4k-instruct"
