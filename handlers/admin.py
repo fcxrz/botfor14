@@ -2,11 +2,13 @@ from aiogram import Router, Bot, F, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from db.sqlite import Database
 from utils.crypto import encrypt_data
 import os
 
 router = Router()
 ANGEL_ID = int(os.getenv("ANGEL_ID", 0))
+
 
 class AdminStates(StatesGroup):
     waiting_for_girl_response = State()
@@ -14,10 +16,15 @@ class AdminStates(StatesGroup):
     recording_capsule_context = State()
 
 @router.message(Command("отклик"))
-async def cmd_check_in(message: types.Message, bot: Bot, state: FSMContext):
-    await bot.send_message(ANGEL_ID, "Серёжа спрашивает, всё ли ок? Расскажи парой слов.")
-    await state.set_state(AdminStates.waiting_for_girl_response)
-    await message.answer("Запрос отправлен. Ждём ответа...")
+async def cmd_check_in(message: types.Message, bot: Bot, state: FSMContext, angel_id: int):
+    try:
+        await bot.send_message(angel_id, "Серёжа спрашивает, всё ли ок? Нажми на кнопочку 'Я в порядке' снизу! Или напиши ему лично: https://t.me/pcxrz")
+        await state.set_state(AdminStates.waiting_for_girl_response)
+        await message.answer("Запрос отправлен. Ждём ответа...")
+        print("Запрос отправлен. Ждём ответа...")
+    except Exception as e:
+        await message.answer(f"Ошибка: не могу найти чат с девушкой. Она нажала /start?")
+    
 
 @router.message(AdminStates.waiting_for_girl_response)
 async def process_girl_reply(message: types.Message, ai, bot: Bot, state: FSMContext, seryozha_id):
@@ -50,3 +57,17 @@ async def process_capsule_final(message: types.Message, state: FSMContext, ai, d
     
     await message.answer(f"Готово! Через 30 дней я пришлю это сообщение с твоим вступлением:\n\n\"{intro}\"")
     await state.clear()
+
+@router.message(Command("моменты"))
+async def list_moments(message: types.Message, db: Database, seryozha_id: int):
+    if message.from_user.id != seryozha_id: return
+
+    available = db.get_available_capsules()
+    if not available:
+        await message.answer("📭 Пока новых доступных моментов нет. Подожди, пока время разблокировки наступит!")
+        return
+
+    for m_id, context, file_id in available:
+        await message.answer(f"📦 Доступен момент: {context}")
+        await message.answer_voice(file_id)
+        # Опционально: db.mark_as_viewed(m_id) — чтобы не слать одно и то же дважды
