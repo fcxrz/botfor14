@@ -6,7 +6,7 @@ from db.sqlite import Database
 from utils.weather import get_omsk_weather
 from datetime import datetime
 from aiogram.fsm.context import FSMContext
-from main import AsyncIOScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
 import pytz
