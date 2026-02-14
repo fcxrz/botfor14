@@ -12,8 +12,9 @@ from handlers import admin, scheduler, menu
 from db.sqlite import Database
 from ai_engine.model import AIEngine
 from pywe_storage import MemoryStorage
-from handlers import scheduler as paschalka_scheduler  # Переименовали файл в коде
+from handlers import scheduler as paschalka_scheduler 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from config import TOKEN, SERYOZHA_ID, ANGEL_ID # на всяки
 
 load_dotenv()
 

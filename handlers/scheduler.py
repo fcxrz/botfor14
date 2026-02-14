@@ -1,6 +1,6 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Bot
-from main import SERYOZHA_ID
+from config import SERYOZHA_ID
 from utils.crypto import decrypt_data
 from datetime import datetime
 from db.sqlite import Database
