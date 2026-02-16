@@ -24,6 +24,8 @@ class MenuStates(StatesGroup):
     waiting_for_context = State()
     waiting_for_unlock_time = State()
     waiting_for_choice_situation = State()
+    waiting_for_pulse_type = State()
+    waiting_for_pulse_text = State()
 
 class MediationStates(StatesGroup):
     waiting_for_input = State()
@@ -191,7 +193,7 @@ async def process_mediation(message: types.Message, state: FSMContext, db: Datab
     await state.clear()
 
 @router.message(F.text == "✨ Тёплый импульс ✨")
-async def warm_impulse(message: types.Message):
+async def warm_impulse(message: types.Message, state: FSMContext):
     builder = ReplyKeyboardBuilder()
     # Просто текст, без callback_data
     builder.row(types.KeyboardButton(text="🌱 Лёгкий 🌱"))
@@ -199,22 +201,51 @@ async def warm_impulse(message: types.Message):
     builder.row(types.KeyboardButton(text="💥 Глубокий 💥"))
     builder.row(types.KeyboardButton(text="⬅️ Назад"))
     
+    await state.set_state(MenuStates.waiting_for_pulse_type)
     await message.answer(
         "Выбери интенсивность импульса:", 
         reply_markup=builder.as_markup(resize_keyboard=True)
     )
 
-@router.message(F.text.in_({"🌱 Лёгкий 🌱", "🔥 Средний 🔥", "💥 Глубокий 💥"}))
-async def handle_impulse_text(message: types.Message, bot, seryozha_id: int):
-    lvl = message.text
-    
-    # отправка админу
-    await bot.send_message(seryozha_id, f"💓 Тёплый импульс от неё!\nИнтенсивность: {lvl}")
+@router.message(MenuStates.waiting_for_pulse_type, F.text.in_(["💥 Глубокий 💥", "🔥 Средний 🔥", "🌱 Лёгкий 🌱"]))
+async def process_pulse_type(message: types.Message, state: FSMContext):
+    await state.update_data(pulse_type=message.text)
 
+    builder = ReplyKeyboardBuilder()
+    builder.row(types.KeyboardButton(text = "⬅️ Назад"))
+
+    await state.set_state(MenuStates.waiting_for_pulse_text)
     await message.answer(
-        f"Ты отправила {lvl} импульс. Серёжа уже в курсе! ❤️",
-        reply_markup=get_main_menu() # здесь вызывай свою функцию главного меню
+        f"Сила: {message.text}\nЧто напишем в дополнение?\n"
+        "(Напиши текст или отправь '-', чтобы отправить только импульс)",
+        reply_markup=ReplyKeyboardBuilder().row(types.KeyboardButton(text="⬅️ Назад")).as_markup(resize_keyboard=True)
     )
+
+@router.message(MenuStates.waiting_for_pulse_text)
+async def process_pulse_final(message: types.Message, state: FSMContext, bot, seryozha_id: int):
+    data = await state.get_data()
+    pulse_type = data.get("pulse_type")
+    
+    # усли ввел "-", подставляем красвую стандартную фразу
+    user_text = message.text if message.text != "-" else "Ангелина просто шлет тебе свое тепло."
+
+    msg_to_her = (
+        f"🧨 ТЕБЕ ПРИЛЕТЕЛ {pulse_type} ИМПУЛЬС ✨\n\n"
+        f"💬 Сообщение: _{user_text}_\n\n"
+        "✨ Почувствуй это тепло прямо сейчас."
+    )
+    
+    try:
+        await message.bot.send_message(seryozha_id, msg_to_her, parse_mode="Markdown")  # ✅ message.bot
+        await message.answer("✅ Импульс доставлен в самое сердце!", reply_markup=get_main_menu())
+    except Exception as e:
+        await message.answer(f"❌ Не удалось отправить: {(str(e))}")
+    
+
+@router.message(F.text == "⬅️ Назад")
+async def go_back(message: types.Message, state: FSMContext):
+    await state.clear() # сброс
+    await message.answer("Возвращаемся в главное меню.", reply_markup=get_main_menu())
 
 
 

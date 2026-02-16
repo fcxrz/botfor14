@@ -36,7 +36,7 @@ async def cmd_pulse_start(message: types.Message, state: FSMContext, seryozha_id
     await message.answer("Выбери силу импульса для неё:", reply_markup=get_pulse_keyboard())
     await state.set_state(AdminStates.waiting_for_pulse_type)
 
-# Обработка выбора силы
+# обработка выбора силы
 @router.message(AdminStates.waiting_for_pulse_type, F.text.in_(["💥 Глубокий 💥", "🔥 Средний 🔥", "🌱 Лёгкий 🌱"]))
 async def process_pulse_type(message: types.Message, state: FSMContext):
     await state.update_data(pulse_type=message.text)
