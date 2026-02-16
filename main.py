@@ -63,7 +63,7 @@ async def main():
     async def start(message: types.Message):
         if message.from_user.id == SERYOZHA_ID:
             db.set_user(message.from_user.id, "admin")
-            await message.answer("Привет, Серёжа! Твои команды: /отклик, /пасхалка, /моменты")
+            await message.answer("Привет, Серёжа! Твои команды: /отклик, /пасхалка, /моменты, /импульс")
         else:
             db.set_user(message.from_user.id, "girl")
             await message.answer("Привет! Я твой эмоциональный мост между тобой и Сережей! \n\n"
