@@ -12,12 +12,18 @@ from handlers import admin, scheduler, menu
 from db.sqlite import Database
 from ai_engine.model import AIEngine
 from handlers import scheduler as paschalka_scheduler 
+from handlers import scheduler as scheduler_h
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from config import TOKEN, SERYOZHA_ID, ANGEL_ID # на всяки
 
 load_dotenv()
 
-# в раилвее добавьте TELEGRAM_BOT_TOKEN в variables
+
+main_scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
+
+
+
+# в раилвее добавьте TELEGRAM_BOT_TOKEN ваш айди и айдишник любимой в variables
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 SERYOZHA_ID = int(os.getenv("SERYOZHA_ID", 0)) # ваш айдишник
 ANGEL_ID = int(os.getenv("ANGEL_ID", 0)) # айдишник любимой
@@ -25,7 +31,7 @@ ANGEL_ID = int(os.getenv("ANGEL_ID", 0)) # айдишник любимой
 aioproc = AsyncIOScheduler()
 
 async def main():
-    #логирование епта
+    #логирование
     logging.basicConfig(level=logging.WARNING)
 
     storage = MemoryStorage()
@@ -33,6 +39,8 @@ async def main():
     dp = Dispatcher()
     db = Database()
     ai = AIEngine()
+
+    main_scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
 
     # проброс зависимостей в хендлеры
     dp["db"] = db
@@ -46,18 +54,16 @@ async def main():
     if menu.router:
         dp.include_router(menu.router) # ПОТОМ ДАМА
 
-    aioproc.start()
+    scheduler_h.setup_scheduler(
+        bot=bot, 
+        db=db, 
+        angel_id=ANGEL_ID, 
+        seryozha_id=SERYOZHA_ID, 
+        scheduler=main_scheduler
+    )
+
+    main_scheduler.start()
     print("Бот в поряде все норм!")
-
-    if hasattr(paschalka_scheduler, 'setup_scheduler'):
-        paschalka_scheduler.setup_scheduler(
-            bot, 
-            db, 
-            ANGEL_ID, 
-            SERYOZHA_ID, 
-            aioproc # планировщик
-        )
-
 
     @dp.message(Command("start"))
     async def start(message: types.Message):

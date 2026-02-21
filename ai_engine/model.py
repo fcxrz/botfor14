@@ -7,12 +7,12 @@ from .prompts import SYSTEM_PROMPT, TASK_CAPSULE
 
 class AIEngine:
     def __init__(self):
-           # Используем официальный эндпоинт совместимости v1
+            # используем официальный эндпоинт совместимости
         self.client = AsyncOpenAI(
             api_key=os.getenv("AI_API_KEY"),
             base_url="https://router.huggingface.co/v1" 
         )
-        # Модели, которые точно поддерживают этот интерфейс
+        # модели, которые точно поддерживают этот интерфейс
         self.models = [
             "Qwen/Qwen2.5-7B-Instruct",
             "meta-llama/Llama-3.2-3B-Instruct",
@@ -22,7 +22,7 @@ class AIEngine:
 
     async def get_capsule_intro(self, context_text: str):
         """Специальный метод для генерации вступления к пасхалке"""
-        # Вызываем уже существующий метод генерации
+        # вызываем уже существующий метод генерации
         return await self.generate(
             TASK_CAPSULE, 
             user_context=context_text
@@ -64,9 +64,9 @@ class AIEngine:
                 if "loading" in err_msg.lower():
                     print("Модель загружается, ждем 20 сек...")
                     await asyncio.sleep(20)
-                    return await self._ask_ai(prompt) # Пробуем еще раз ту же модель
+                    return await self._ask_ai(prompt) 
 
-                # Если модель не найдена или ошибка доступа — переключаемся
+                # если модель не найдена или ошибка доступа — переключаемся
                 self.current_model_idx = (self.current_model_idx + 1) % len(self.models)
                 continue
 

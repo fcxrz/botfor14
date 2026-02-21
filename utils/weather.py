@@ -3,10 +3,9 @@ import logging
 import asyncio
 
 async def get_omsk_weather():
-    # Координаты Омска
+    # координаты Омска
     lat = 54.99
     lon = 73.37
-    # Убираем лишние пробелы в URL!
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code&wind_speed_unit=ms"
     
     try:
@@ -17,7 +16,7 @@ async def get_omsk_weather():
                 temp = round(data["temperature_2m"])
                 code = data["weather_code"]
                 
-                # Расшифровка кодов погоды WMO
+                # расшифровка
                 descriptions = {
                     0: "ясно ☀️",
                     1: "преимущественно ясно 🌤", 2: "переменная облачность ⛅️", 3: "пасмурно ☁️",
@@ -38,7 +37,6 @@ async def get_omsk_weather():
     except Exception as e:
         logging.error(f"Weather error: {e}")
         return "уютная омская погода"
-# Проверка работы
+    
 if __name__ == "__main__":
-    # Запускаем асинхронную функцию через asyncio.run()
     print(asyncio.run(get_omsk_weather()))

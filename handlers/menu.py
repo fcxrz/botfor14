@@ -1,13 +1,12 @@
+import random
 from aiogram import Router, F, types
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from ai_engine.model import AIEngine
 from ai_engine.prompts import *
 from db.sqlite import Database
 from utils.weather import get_omsk_weather
-from datetime import datetime
 from aiogram.fsm.context import FSMContext
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 
 import pytz
 from datetime import datetime, timedelta
@@ -26,15 +25,23 @@ class MenuStates(StatesGroup):
     waiting_for_choice_situation = State()
     waiting_for_pulse_type = State()
     waiting_for_pulse_text = State()
+    # 21.02
+    waiting_for_custom_kick = State()
 
 class MediationStates(StatesGroup):
     waiting_for_input = State()
 
+# новые стейты лучше создавать
+class HellsingStates(StatesGroup):
+    waiting_for_content = State()
+    waiting_for_timeframe = State()
+    waiting_for_custom_days = State()
+
 def get_main_menu():
     builder = ReplyKeyboardBuilder()
     builder.row(types.KeyboardButton(text="✨ Тёплый импульс ✨"), types.KeyboardButton(text="🧸 Эхо близости 🧸"))
-    builder.row(types.KeyboardButton(text="🧣 Мягкий мост 🧣"), types.KeyboardButton(text="😤 Дать пинка 😤"))
-    builder.row(types.KeyboardButton(text="🤭 Игривый вызов 🤭"), types.KeyboardButton(text="🌌 Мост понимания 🌌"))
+    builder.row(types.KeyboardButton(text="✉️ Сообщение Хеллсинг ✉️"), types.KeyboardButton(text="😤 Дать пинка 😤"))
+    builder.row(types.KeyboardButton(text="🌆 Совместный вечер 🌆"), types.KeyboardButton(text="🌌 Мост понимания 🌌"))
     builder.row(types.KeyboardButton(text='🔔 Я в порядке 🔔'))
     builder.row(types.KeyboardButton(text="🤓 Верный выбор 🤓"))
     return builder.as_markup(resize_keyboard=True)
@@ -51,8 +58,11 @@ def get_time_of_day():
 
 @router.message(F.text == "⬅️ Назад")
 async def go_back(message: types.Message, state: FSMContext):
-    await state.clear() # сброс
+    await state.clear()
     await message.answer("Возвращаемся в главное меню.", reply_markup=get_main_menu())
+
+
+
 
 @router.message(F.text == "🤓 Верный выбор 🤓")
 async def start_choice_helper(message: types.Message, state: FSMContext):
@@ -64,10 +74,9 @@ async def start_choice_helper(message: types.Message, state: FSMContext):
     )
     await state.set_state(MenuStates.waiting_for_choice_situation)
 
-# 2. Обработка ситуации через ИИ
 @router.message(MenuStates.waiting_for_choice_situation)
 async def process_choice_situation(message: types.Message, state: FSMContext, ai: AIEngine):
-    # Промпт, который заставляет ИИ думать как ты
+    # промпт, который заставляет ИИ думать как ты
     prompt = f"""
     Ты выступаешь в роли мудрого и любящего советника для девушки. Твой характер и логика основаны на ценностях её парня, Серёжи.
     
@@ -87,7 +96,7 @@ async def process_choice_situation(message: types.Message, state: FSMContext, ai
     await message.answer(f"💡 **Мой совет:**\n\n{answer}", reply_markup=get_main_menu())
     await state.clear()
 
-@router.message(F.text == "🤭 Игривый вызов 🤭")
+@router.message(F.text == "🌆 Совместный вечер 🌆")
 async def handle_challenge(message: types.Message, ai: AIEngine, angel_id: int):
     if message.from_user.id != angel_id: 
         return
@@ -135,34 +144,32 @@ async def process_mediation(message: types.Message, state: FSMContext, db: Datab
     user_role = "Серёжа" if user_id == seryozha_id else "Она"
     partner_id = angel_id if user_id == seryozha_id else seryozha_id
     
-    # 1. Сохраняем сообщение в базу
     db.add_mediation_msg(user_id, user_role, message.text)
     
-    # 2. Проверяем историю (последние сообщения)
-    # Нам нужно понять, написал ли уже партнер
-    history = db.get_mediation_history(limit=2) # Берем последние 2 сообщения
+    # нам нужно понять, написал ли уже партнер
+    history = db.get_mediation_history(limit=2) # берем последние 2 сообщения
     
-    # Если в истории только одно сообщение (текущее), значит партнер еще не высказался
+    # если в истории только одно сообщение (текущее), значит партнер еще не высказался
     if len(history) < 2 or history[0][0] == history[1][0]:
         await message.answer("Я услышал тебя и сохранил твои чувства. Теперь я иду к партнеру, чтобы узнать его позицию. Как только он ответит — я вынесу решение.")
         
-        # Уведомляем вторую половинку
+        # уведомляем вторую половинку
         try:
             partner_name = "Серёжа" if partner_id == seryozha_id else "твоя любимая"
             await bot.send_message(
                 partner_id, 
                 f"❤️ !Мост понимания активирован! ❤️\n{user_role} хочет обсудить возникшую ситуацию. "
                 "Пожалуйста, зайди в 'Мост понимания' и поделись своими чувствами, чтобы я мог вам помочь.",
-                reply_markup=get_main_menu() # Чтобы человеку было удобно нажать кнопку
+                reply_markup=get_main_menu()
             )
         except Exception as e:
             print(f"Не удалось отправить уведомление партнеру: {e}")
             
     else:
-        # 3. Если оба высказались — запускаем ИИ
+        # если оба высказались — запускаем ИИ
         await message.answer("Вторая сторона высказалась. Анализирую ваши сердца... Пожалуйста, подожди.")
         
-        # Формируем историю для ИИ (берем побольше контекста для глубины)
+        # формируем историю для ИИ (берем побольше контекста)
         full_history = db.get_mediation_history(limit=10)
         formatted_history = "\n".join([f"{h[0]}: {h[1]}" for h in reversed(full_history)])
 
@@ -185,7 +192,7 @@ async def process_mediation(message: types.Message, state: FSMContext, db: Datab
         
         analysis = await ai.generate(prompt)
         
-        # Отправляем результат ОБОИМ
+        # отправляем результат ОБОИМ
         result_text = "📝 **Мой анализ ситуации и путь к примирению:**\n\n" + analysis
         await bot.send_message(seryozha_id, result_text)
         await bot.send_message(angel_id, result_text)
@@ -195,7 +202,6 @@ async def process_mediation(message: types.Message, state: FSMContext, db: Datab
 @router.message(F.text == "✨ Тёплый импульс ✨")
 async def warm_impulse(message: types.Message, state: FSMContext):
     builder = ReplyKeyboardBuilder()
-    # Просто текст, без callback_data
     builder.row(types.KeyboardButton(text="🌱 Лёгкий 🌱"))
     builder.row(types.KeyboardButton(text="🔥 Средний 🔥"))
     builder.row(types.KeyboardButton(text="💥 Глубокий 💥"))
@@ -226,7 +232,7 @@ async def process_pulse_final(message: types.Message, state: FSMContext, bot, se
     data = await state.get_data()
     pulse_type = data.get("pulse_type")
     
-    # усли ввел "-", подставляем красвую стандартную фразу
+    # усли ввел "-", подставляем фразу
     user_text = message.text if message.text != "-" else "Ангелина просто шлет тебе свое тепло."
 
     msg_to_her = (
@@ -236,7 +242,7 @@ async def process_pulse_final(message: types.Message, state: FSMContext, bot, se
     )
     
     try:
-        await message.bot.send_message(seryozha_id, msg_to_her, parse_mode="Markdown")  # ✅ message.bot
+        await message.bot.send_message(seryozha_id, msg_to_her, parse_mode="Markdown") 
         await message.answer("✅ Импульс доставлен в самое сердце!", reply_markup=get_main_menu())
     except Exception as e:
         await message.answer(f"❌ Не удалось отправить: {(str(e))}")
@@ -260,21 +266,55 @@ async def handle_emergency(message: types.Message, bot, seryozha_id: int, angel_
 
 
 @router.message(F.text == "😤 Дать пинка 😤")
-async def request_care(message: types.Message):
+async def request_kick(message: types.Message):
     builder = ReplyKeyboardBuilder()
-    for btn in ["🤗 Просто обними (временно недоступно!) 🤗", "🕒 Внимания 🕒", "😤 Будь опорой 😤", "⬅️ Назад"]:
+    buttons = [
+        "🗣 Хочу диалог, но не знаю как начать",
+        "🧨 Просто сильно пнуть!",
+        "❤️ Мне больно, но я не хочу тебя терять",
+        "✏️ Свой вариант (текст/ГС/видео)",
+        "⬅️ Назад"
+    ]
+    for btn in buttons:
         builder.add(types.KeyboardButton(text=btn))
-    builder.adjust(1, 1, 1, 1)
-    await message.answer("Какая забота нужна?", reply_markup=builder.as_markup(resize_keyboard=True))
+    builder.adjust(1) # Все кнопки в один столбец для удобства
+    
+    await message.answer(
+        "Выбери способ сделать шаг навстречу или отправь что-то своё:", 
+        reply_markup=builder.as_markup(resize_keyboard=True)
+    )
 
-@router.message(F.text.in_({"🤗 Просто обними (временно недоступно!) 🤗", "🕒 Внимания 🕒", "😤 Будь опорой 😤"}))
-async def handle_care(message: types.Message, bot, seryozha_id: int):
-    await bot.send_message(seryozha_id, f"🆘 Ей нужна твоя забота: {message.text}")
-    await message.answer("Запрос отправлен. ❤️", reply_markup=get_main_menu())
+@router.message(F.text.in_({
+    "🗣 Хочу диалог, но не знаю как начать",
+    "🧨 Просто сильно пнуть!",
+    "❤️ Мне больно, но я не хочу тебя терять"
+}))
+async def handle_predefined_kick(message: types.Message, bot, seryozha_id: int):
+    await bot.send_message(seryozha_id, f"⚡️ **Тебе прилетел «ПинОк»!**\n\nОна говорит: {message.text}")
+    await message.answer("Твой сигнал услышан. Спасибо тебе. ❤️", reply_markup=get_main_menu())
+
+@router.message(F.text == "✏️ Свой вариант (текст/ГС/видео)")
+async def start_custom_kick(message: types.Message, state: FSMContext):
+    await message.answer(
+        "Я готов. Пришли мне текст, запиши ГС, видео или отправь фото.\n"
+        "Я передам это Серёже как твой искренний порыв.",
+        reply_markup=ReplyKeyboardBuilder().row(types.KeyboardButton(text="⬅️ Назад")).as_markup(resize_keyboard=True)
+    )
+    await state.set_state(MenuStates.waiting_for_custom_kick)
+
+@router.message(MenuStates.waiting_for_custom_kick)
+async def process_custom_kick(message: types.Message, state: FSMContext, bot, seryozha_id: int):
+
+    await bot.send_message(seryozha_id, "⚡️ Тебе прилетел особенный «ПинОк»!\nЛови послание:")
+
+    await message.copy_to(chat_id=seryozha_id)
+    
+    await message.answer("Твоё послание доставлено. Ты молодец, что решилась. ❤️", reply_markup=get_main_menu())
+    await state.clear()
 
 
 
-@router.message(F.text == "🧸 Эхо близости 🧸") # Можно переименовать кнопку в "Капсула моментов"
+@router.message(F.text == "🧸 Эхо близости 🧸") # можно переименовать кнопку в "Капсула моментов"
 async def start_capsule(message: types.Message, state: FSMContext):
     await message.answer(
         "🎙 **Создаём новый момент.**\nЗапиши голосовое сообщение, которое я сохраню для Серёжи.",
@@ -306,7 +346,7 @@ async def process_capsule_final(message: types.Message, state: FSMContext, db: D
     data = await state.get_data()
     text = message.text
     
-    # Логика определения времени (МСК)
+    # логика определения времени (МСК)
     moscow_tz = pytz.timezone('Europe/Moscow')
     unlock_at = datetime.now(moscow_tz)
 
@@ -332,99 +372,94 @@ async def process_capsule_final(message: types.Message, state: FSMContext, db: D
 
 
 
-@router.message(F.text == "🧣 Мягкий мост 🧣")
-async def soft_bridge(message: types.Message):
-    builder = ReplyKeyboardBuilder()
-    for btn in ["☁️ Грустно ☁️", "🌪 Зла 🌪", "🫂 Обними позже(временно недоступно, к сожалению) 🫂", "🗣 Поговорим вечером 🗣", "⬅️ Назад"]:
-        builder.add(types.KeyboardButton(text=btn))
-    builder.adjust(2, 2, 1)
-    await message.answer("Что на душе?", reply_markup=builder.as_markup(resize_keyboard=True))
 
-@router.message(F.text.in_({"☁️ Грустно ☁️", "🌪 Зла 🌪", "🫂 Обними позже(временно недоступно, к сожалению) 🫂", "🗣 Поговорим вечером 🗣"}))
-async def handle_bridge_selection(message: types.Message, state: FSMContext):
-    await state.update_data(bridge_tone=message.text)
-    await message.answer("Напиши причину (одним сообщением) или отправь '-', чтобы пропустить:", reply_markup=types.ReplyKeyboardRemove())
-    await state.set_state(MenuStates.waiting_for_bridge_reason)
-
-
-
-@router.message(MenuStates.waiting_for_bridge_reason)
-async def process_bridge_reason(message: types.Message, state: FSMContext):
-    if message.text == "⬅️ Назад": # Обработка назад внутри состояния
-        await state.clear()
-        return await message.answer("Отменено", reply_markup=get_main_menu())
-
-    reason = message.text if message.text != "-" else "без уточнений"
-    await state.update_data(bridge_reason=reason)
+async def save_hellsing_to_db(message: types.Message, state: FSMContext, db: Database, seconds_limit: int, seryozha_id: int, angel_id: int, is_test=False):
+    data = await state.get_data()
+    now = datetime.now()
     
-    # Предлагаем варианты времени (по МСК девушки)
-    builder = ReplyKeyboardBuilder()
-    builder.row(types.KeyboardButton(text="Сейчас"), types.KeyboardButton(text="Через 1 час"))
-    builder.row(types.KeyboardButton(text="Через 2 часа"), types.KeyboardButton(text="Вечером (21:00 МСК)"))
-    builder.row(types.KeyboardButton(text="⬅️ Назад"))
+
+    if is_test:
+        send_at = now + timedelta(seconds=seconds_limit) 
+    # cчитаем случайный момент: от 10 минут до указанного лимита
+    else:
+        safe_limit = max(601, seconds_limit)
+        random_seconds = random.randint(600, safe_limit)
+        send_at = now + timedelta(seconds=random_seconds)
+    
+    recipient_id = angel_id if message.from_user.id == seryozha_id else seryozha_id
+    
+    db.add_hellsing(
+        sender_id=message.from_user.id,
+        recipient_id=recipient_id,
+        chat_id=data['chat_id'],
+        msg_id=data['msg_id'],
+        send_at=send_at
+    )
     
     await message.answer(
-        "Когда Серёжа должен получить это сообщение? (Укажи время по твоему МСК или выбери вариант):",
-        reply_markup=builder.as_markup(resize_keyboard=True)
+        f"🎯 Цель захвачена 🎯\n"
+        f"Я спрятал твоё послание. Оно детонирует в случайный момент до `{send_at.strftime('%d.%m.%Y %H:%M')}`.\n"
+        "Никто не знает, когда это случится. Даже я.", 
+        reply_markup=get_main_menu()
     )
-    await state.set_state(MenuStates.waiting_for_bridge_time)
-
-@router.message(MenuStates.waiting_for_bridge_time)
-async def process_bridge_time(message: types.Message, state: FSMContext, bot, seryozha_id: int, scheduler: AsyncIOScheduler):
-    user_text = message.text
-    data = await state.get_data()
-    
-    # Настройка таймзон
-    moscow_tz = pytz.timezone('Europe/Moscow')
-    omsk_tz = pytz.timezone('Asia/Omsk')
-    
-    now_moscow = datetime.now(moscow_tz)
-    send_time = now_moscow
-
-    # Логика выбора времени
-    if "1 час" in user_text:
-        send_time = now_moscow + timedelta(hours=1)
-    elif "2 часа" in user_text:
-        send_time = now_moscow + timedelta(hours=2)
-    elif "21:00" in user_text:
-        send_time = now_moscow.replace(hour=21, minute=0, second=0, microsecond=0)
-        if send_time < now_moscow:
-            send_time += timedelta(days=1)
-    elif user_text == "Сейчас":
-        send_time = now_moscow
-    else:
-        # Пытаемся распарсить ручной ввод (например "20:30")
-        try:
-            h, m = map(int, user_text.split(':'))
-            send_time = now_moscow.replace(hour=h, minute=m, second=0, microsecond=0)
-            if send_time < now_moscow: send_time += timedelta(days=1)
-        except:
-            if user_text != "⬅️ Назад":
-                return await message.answer("Напиши время в формате ЧЧ:ММ (например 18:30)")
-
-    # Пересчитываем в Омск для уведомления (просто для лога)
-    send_time_omsk = send_time.astimezone(omsk_tz)
-    
-    final_text = (f"🌉 Мягкий мост...\n"
-                  f"Состояние: {data['bridge_tone']}\n"
-                  f"Причина: {data['bridge_reason']}\n"
-                  f"🕒 Отправлено в {send_time.strftime('%H:%M')} по МСК")
-
-    if user_text == "Сейчас":
-        await bot.send_message(seryozha_id, final_text)
-        await message.answer("Серёжа уже получил сообщение! ❤️", reply_markup=get_main_menu())
-    else:
-        # Планируем задачу
-        scheduler.add_job(
-            send_delayed_bridge,
-            'date',
-            run_date=send_time,
-            args=[bot, seryozha_id, final_text]
-        )
-        await message.answer(
-            f"Принято! Серёжа получит весточку в {send_time.strftime('%H:%M')} по твоему времени "
-            f"(в Омске будет {send_time_omsk.strftime('%H:%M')}).",
-            reply_markup=get_main_menu()
-        )
-    
     await state.clear()
+
+@router.message(F.text == "✉️ Сообщение Хеллсинг ✉️")
+async def start_hellsing(message: types.Message, state: FSMContext):
+    await message.answer(
+        "🧛 Протокол Хеллсинг запущен 🧛\n\n"
+        "Пришли мне то, что я должен доставить (текст, ГС, видео, фото). "
+        "Я спрячу это и подброшу партнеру в самый неожиданный момент.",
+        reply_markup=ReplyKeyboardBuilder().row(types.KeyboardButton(text="⬅️ Назад")).as_markup(resize_keyboard=True)
+    )
+    await state.set_state(HellsingStates.waiting_for_content)
+
+@router.message(HellsingStates.waiting_for_content)
+async def process_hellsing_content(message: types.Message, state: FSMContext):
+    # cохраняем ID сообщения и чата
+    await state.update_data(msg_id=message.message_id, chat_id=message.chat.id)
+    
+    builder = ReplyKeyboardBuilder()
+    builder.row(types.KeyboardButton(text="🧪 Тест (5 минут)"))
+    builder.row(types.KeyboardButton(text="❓ Свое время ❓"))
+    builder.row(types.KeyboardButton(text="🕰️ В этом месяце 🕰️"))
+    builder.row(types.KeyboardButton(text="📅 В этом году 📅"))
+    builder.row(types.KeyboardButton(text="⬅️ Назад"))
+    
+    await message.answer("В какой период времени мне совершить атаку?", reply_markup=builder.as_markup(resize_keyboard=True))
+    await state.set_state(HellsingStates.waiting_for_timeframe)
+
+@router.message(HellsingStates.waiting_for_timeframe)
+async def process_hellsing_time(message: types.Message, state: FSMContext, db: Database, seryozha_id: int, angel_id: int):
+
+    now = datetime.now()
+    seconds_limit = 0
+    
+    if message.text == "🕰️ В этом месяце 🕰️":
+        seconds_limit = 30 * 24 * 60 * 60
+    elif message.text == "🧪 Тест (5 минут)":
+        seconds_limit = 300 
+        await save_hellsing_to_db(message, state, db, seconds_limit, seryozha_id, angel_id, is_test=True)
+        return
+    elif message.text == "📅 В этом году 📅":
+        seconds_limit = 365 * 24 * 60 * 60
+    elif message.text == "❓ Свое время ❓":
+        await message.answer("На сколько дней максимум я могу отложить это послание? (Введи число дней, например: 7 или 150)")
+        await state.set_state(HellsingStates.waiting_for_custom_days)
+        return
+
+    await save_hellsing_to_db(message, state, db, seconds_limit, seryozha_id, angel_id)
+
+@router.message(HellsingStates.waiting_for_custom_days)
+async def process_custom_days(message: types.Message, state: FSMContext, db: Database, seryozha_id: int, angel_id: int):
+    if not message.text.isdigit():
+        await message.answer("Пожалуйста, введи только число (количество дней).")
+        return
+
+    days = int(message.text)
+    if days <= 0:
+        await message.answer("Число должно быть больше нуля.")
+        return
+
+    seconds_limit = days * 24 * 60 * 60
+    await save_hellsing_to_db(message, state, db, seconds_limit, seryozha_id, angel_id)
